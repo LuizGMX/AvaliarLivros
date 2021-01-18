@@ -6,6 +6,7 @@ import {
   Text,
   Image,
   SafeAreaView,
+  ActivityIndicator,
 } from "react-native";
 import "react-native-gesture-handler";
 import { NavigationContainer } from "@react-navigation/native";
@@ -24,31 +25,36 @@ async function storeData(value) {
   }
 }
 
-function insert_usuarios() {
-  getData();
-  async function getData() {
-    try {
-      const value = await AsyncStorage.getItem("1");
-      if (value !== null) {
-        axios
-          .post(
-            `https://avaliarlivros.herokuapp.com/insert_usuarios?usuario=${value}`
-          )
-          .then(function (response) {
-            if (response.data === "INSERT usuarios SUCCESS") {
-              alert("Usuário criado com SUCESSO");
-            } else {
-              alert("Erro na criação do usuário, tente outro.");
-            }
-          });
+function Login() {
+  const [loading, setLoading] = useState(false);
+
+  function insert_usuarios() {
+    getData();
+    setLoading(true);
+    async function getData() {
+      try {
+        const value = await AsyncStorage.getItem("1");
+        if (value !== null) {
+          axios
+            .post(
+              `https://avaliarlivros.herokuapp.com/insert_usuarios?usuario=${value}`
+            )
+            .then(function (response) {
+              setLoading(false);
+              if (response.data === "INSERT usuarios SUCCESS") {
+                alert("Usuário criado com SUCESSO");
+              } else {
+                alert("Erro na criação do usuário, tente outro.");
+              }
+            });
+        }
+      } catch (e) {
+        setLoading(false);
+        // error reading value
       }
-    } catch (e) {
-      // error reading value
     }
   }
-}
 
-function Login() {
   return (
     <>
       <SafeAreaView style={styles.droidSafeArea}>
@@ -63,6 +69,7 @@ function Login() {
           title={"Criar Usuário Digitado Acima"}
           onPress={() => insert_usuarios()}
         />
+        <ActivityIndicator size="large" color="#414192" animating={loading} />
       </SafeAreaView>
     </>
   );
@@ -72,37 +79,51 @@ function MeusLivros() {
   const [data, setData] = useState([]);
   const [mostrar, setMostrar] = useState(false);
   const [nota, setNota] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getLivro();
-    console.log("useEffect");
+    //console.log("useEffect");
   }, []);
 
   function getLivro() {
     var todosLivros = [];
 
-    axios
-      .get(`https://avaliarlivros.herokuapp.com/select_livros`)
-      .then(function (response) {
-        for (var i = 0; i < response.data.length; i++) {
-          var book_id = response.data[i].book_id;
-
-          var nota = response.data[i].nota;
-
-          setNota(nota);
-
+    getData();
+    async function getData() {
+      try {
+        const value = await AsyncStorage.getItem("1");
+        if (value !== null) {
           axios
-            .get(`https://www.googleapis.com/books/v1/volumes/${book_id}`)
+            .get(
+              `https://avaliarlivros.herokuapp.com/select_livros?usuario=${value}`
+            )
             .then(function (response) {
-              todosLivros.push(response.data);
-            })
-            .then(function () {
-              setData(todosLivros.flat());
-              console.log(todosLivros.flat());
-              setMostrar(true);
+              for (var i = 0; i < response.data.length; i++) {
+                var book_id = response.data[i].book_id;
+
+                var nota = response.data[i].nota;
+
+                setNota(nota);
+
+                axios
+                  .get(`https://www.googleapis.com/books/v1/volumes/${book_id}`)
+                  .then(function (response) {
+                    todosLivros.push(response.data);
+                  })
+                  .then(function () {
+                    setData(todosLivros.flat());
+                    //console.log(todosLivros.flat());
+                    setMostrar(true);
+                    setLoading(false);
+                  });
+              }
             });
         }
-      });
+      } catch (e) {
+        // error reading value
+      }
+    }
   }
 
   return (
@@ -138,7 +159,13 @@ function MeusLivros() {
         <></>
       )}
 
-      <Button title={"Atualizar Livros"} onPress={() => getLivro()} />
+      <Button
+        title={"Atualizar Livros"}
+        style={{ marginTop: 50 }}
+        onPress={() => getLivro()}
+        icon={<Icon name="refresh" size={15} color="white" />}
+      />
+      <ActivityIndicator size="large" color="#414192" animating={loading} />
     </SafeAreaView>
   );
 }
@@ -150,16 +177,8 @@ function DarNotas() {
   const [data, setData] = useState([]);
   const [mostrar, setMostrar] = useState(false);
 
-  useEffect(() => {
-    // getLivro(
-    //   "*@&#*@&*#&*#@&*#&@*&#)@&#@&#*@)&#*@)@#&@)*#&@#*@&*)@#@#&*@#)&BDWHBHDWBHW"
-    // );
-
-    console.log("useEffect");
-  }, []);
-
   function ratingCompleted(rating, bookID) {
-    console.log("Rating is: " + rating + "bookID: " + bookID);
+    //console.log("Rating is: " + rating + "bookID: " + bookID);
     insert_livro(rating, bookID);
   }
 
@@ -197,15 +216,13 @@ function DarNotas() {
     axios
       .get(`https://www.googleapis.com/books/v1/volumes?q=${searchQuery}`)
       .then(function (response) {
-        //alert(response.data.items.length);
-
         var myArray = response.data.items;
 
         myArray = myArray.filter(function (obj) {
           return obj.volumeInfo.imageLinks !== undefined;
         });
 
-        console.log(myArray);
+        // console.log(myArray);
 
         setData(myArray);
         setMostrar(true);
@@ -302,17 +319,7 @@ const styles = StyleSheet.create({
   containerLivro: {
     display: "flex",
     flexDirection: "column",
-  },
-  rating: {
-    display: "flex",
-    flexDirection: "column",
-    marginLeft: 200,
-
-    elevation: 4,
-    shadowOffset: { width: 5, height: 5 },
-    shadowColor: "grey",
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    marginTop: 15,
   },
   droidSafeArea: {
     flex: 1,
