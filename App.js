@@ -16,6 +16,7 @@ import { Input, Button, Rating } from "react-native-elements";
 import Icon from "react-native-vector-icons/FontAwesome";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import base64 from "react-native-base64";
 
 async function storeData(value) {
   try {
@@ -27,6 +28,12 @@ async function storeData(value) {
 
 function Login() {
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    alert(
+      "Caso seja seu primeiro acesso, digite um nome de usuario no campo e clique no botão azul. Nos próximos acessos, basta preenche-lo com o usuario criado, não clique no botão azul novamente."
+    );
+  }, []);
 
   function insert_usuarios() {
     getData();
@@ -68,6 +75,14 @@ function Login() {
         <Button
           title={"Criar Usuário Digitado Acima"}
           onPress={() => insert_usuarios()}
+          icon={
+            <Icon
+              name="plus"
+              size={24}
+              color="white"
+              style={{ marginRight: 10 }}
+            />
+          }
         />
         <ActivityIndicator size="large" color="#414192" animating={loading} />
       </SafeAreaView>
@@ -77,52 +92,49 @@ function Login() {
 
 function MeusLivros() {
   const [data, setData] = useState([]);
-  const [mostrar, setMostrar] = useState(false);
-  const [nota, setNota] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [mostrar, setMostrar] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    getLivro();
-    //console.log("useEffect");
-  }, []);
-
-  function getLivro() {
+  async function getLivro() {
+    setLoading(true);
     var todosLivros = [];
+    try {
+      const value = await AsyncStorage.getItem("1");
+      if (value !== null) {
+        axios
+          .get(
+            `https://avaliarlivros.herokuapp.com/select_livros?usuario=${value}`
+          )
+          .then(function (response) {
+            for (var i = 0; i < response.data.length; i++) {
+              var book_id = response.data[i].book_id;
 
-    getData();
-    async function getData() {
-      try {
-        const value = await AsyncStorage.getItem("1");
-        if (value !== null) {
-          axios
-            .get(
-              `https://avaliarlivros.herokuapp.com/select_livros?usuario=${value}`
-            )
-            .then(function (response) {
-              for (var i = 0; i < response.data.length; i++) {
-                var book_id = response.data[i].book_id;
+              var rating = response.data[i].nota;
 
-                var nota = response.data[i].nota;
+              var id = response.data[i].id;
 
-                setNota(nota);
+              var title = response.data[i].title;
 
-                axios
-                  .get(`https://www.googleapis.com/books/v1/volumes/${book_id}`)
-                  .then(function (response) {
-                    todosLivros.push(response.data);
-                  })
-                  .then(function () {
-                    setData(todosLivros.flat());
-                    //console.log(todosLivros.flat());
-                    setMostrar(true);
-                    setLoading(false);
-                  });
-              }
-            });
-        }
-      } catch (e) {
-        // error reading value
+              var image = base64.decode(response.data[i].cover);
+
+              todosLivros.push({
+                book_id: book_id,
+                rating: rating,
+                id: id,
+                title: title,
+                image: image,
+              });
+
+              console.log(todosLivros);
+
+              setData(todosLivros);
+
+              setLoading(false);
+            }
+          });
       }
+    } catch (e) {
+      // error reading value
     }
   }
 
@@ -136,19 +148,18 @@ function MeusLivros() {
               <View style={styles.containerLivro}>
                 <Image
                   source={{
-                    uri: item.volumeInfo.imageLinks.thumbnail,
+                    uri: item.image,
                   }}
                   style={{ width: 100, height: 100 }}
                 />
 
-                <Text style={styles.text}>{item.volumeInfo.title}</Text>
+                <Text style={styles.text}>{item.title}</Text>
 
                 <Rating
                   type="heart"
                   ratingCount={5}
                   imageSize={30}
-                  startingValue={nota}
-                  readonly
+                  startingValue={item.rating}
                 />
               </View>
             </>
@@ -163,7 +174,14 @@ function MeusLivros() {
         title={"Atualizar Livros"}
         style={{ marginTop: 50 }}
         onPress={() => getLivro()}
-        icon={<Icon name="refresh" size={15} color="white" />}
+        icon={
+          <Icon
+            name="refresh"
+            size={15}
+            color="white"
+            style={{ marginRight: 10 }}
+          />
+        }
       />
       <ActivityIndicator size="large" color="#414192" animating={loading} />
     </SafeAreaView>
@@ -177,23 +195,22 @@ function DarNotas() {
   const [data, setData] = useState([]);
   const [mostrar, setMostrar] = useState(false);
 
-  function ratingCompleted(rating, bookID) {
+  function ratingCompleted(rating, bookID, imageURL, title) {
     //console.log("Rating is: " + rating + "bookID: " + bookID);
-    insert_livro(rating, bookID);
+    insert_livro(rating, bookID, imageURL, title);
   }
 
-  function insert_livro(Rating, bookID) {
+  function insert_livro(Rating, bookID, imageURL, title) {
+    imageURL = base64.encode(imageURL);
     getData();
 
     async function getData() {
       try {
         const value = await AsyncStorage.getItem("1");
         if (value !== null) {
-          //alert(value);
-
           axios
             .post(
-              `https://avaliarlivros.herokuapp.com/insert_livros?book_id=${bookID}&nota=${Rating}&usuario=${value}`
+              `https://avaliarlivros.herokuapp.com/insert_livros?book_id=${bookID}&nota=${Rating}&usuario=${value}&imageURL=${imageURL}&title=${title}`
             )
             .then(function (response) {
               //alert(response.data);
@@ -222,8 +239,6 @@ function DarNotas() {
           return obj.volumeInfo.imageLinks !== undefined;
         });
 
-        // console.log(myArray);
-
         setData(myArray);
         setMostrar(true);
       });
@@ -250,7 +265,14 @@ function DarNotas() {
                   ratingCount={5}
                   imageSize={30}
                   startingValue={1}
-                  onFinishRating={(Rating) => ratingCompleted(Rating, item.id)}
+                  onFinishRating={(Rating) =>
+                    ratingCompleted(
+                      Rating,
+                      item.id,
+                      item.volumeInfo.imageLinks.thumbnail,
+                      item.volumeInfo.title
+                    )
+                  }
                 />
               </View>
             </>
@@ -272,7 +294,15 @@ function DarNotas() {
         onPress={() => {
           getLivro(searchQuery);
         }}
-        icon={<Icon name="search" size={15} color="white" />}
+        title={"Toque para buscar"}
+        icon={
+          <Icon
+            name="search"
+            size={15}
+            color="white"
+            style={{ marginRight: 10 }}
+          />
+        }
       />
     </SafeAreaView>
   );
@@ -326,6 +356,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: Platform.OS === "android" ? 35 : 0,
+    //paddingTop: Platform.OS === "android" ? 35 : 0,
   },
 });
